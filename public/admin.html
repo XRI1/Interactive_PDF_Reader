@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Map Admin</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg: #021a2b; --card: #052a40; --card2: #04324a; --line: #0e4a63; --text: #e6fbff; --muted: #8fbfcc; --accent: #2dd4bf; --lime: #a3e635; --red: #ff6b7a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 24px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; display: grid; gap: 24px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  h2 { margin: 0 0 14px; font-size: 17px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 22px; }
+  .field { display: grid; gap: 5px; min-width: 0; }
+  .field > span { color: var(--muted); font-size: 13px; }
+  input, select { background: #021f31; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; width: 100%; min-width: 0; }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--lime); }
+  button, .btn { background: #0b3d55; color: var(--text); border: 1px solid transparent; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-block; }
+  button:hover, .btn:hover { background: #0f4f6d; }
+  .primary { background: var(--accent) !important; color: #012 !important; font-weight: 600; }
+  .danger { background: transparent; color: var(--red); border-color: #ff6b7a55; }
+  .danger:hover { background: #ff6b7a22; }
+  .status { font-size: 13px; color: var(--lime); }
+  .status.err { color: var(--red); }
+  .help { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .pill { font-size: 13px; font-weight: 500; padding: 3px 10px; border-radius: 99px; background: #0b3d55; color: var(--muted); }
+  .pill.ok { color: var(--lime); background: #a3e6351a; }
+  .pill.err { color: #ffb3bc; background: #ff6b7a1a; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+
+  .switches { display: grid; gap: 14px; }
+  .sw { background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; transition: border-color .3s; }
+  .sw.flash { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+  .sw-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .num { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), var(--lime)); color: #012; font-weight: 700; flex: none; }
+  .sw-head .what { flex: 1; min-width: 200px; }
+  .sw-head .what b { display: block; }
+  .sw-head .what small { color: var(--muted); word-break: break-all; }
+  .sw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; }
+  .sw-grid .wide { grid-column: span 2; }
+  @media (max-width: 600px) { .sw-grid .wide { grid-column: auto; } }
+
+  .list { display: grid; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: var(--card2); border: 1px solid var(--line); border-radius: 10px; }
+  .row .name { flex: 1; min-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .name small { color: var(--muted); margin-left: 8px; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 16px; text-align: center; color: var(--muted); margin-top: 12px; }
+  .drop.over { border-color: var(--accent); color: var(--text); background: #2dd4bf11; }
+  .thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
+  .thumb { width: 130px; cursor: pointer; border: 2px solid transparent; border-radius: 8px; padding: 4px; background: var(--card2); text-align: center; font-size: 12px; color: var(--muted); overflow: hidden; }
+  .thumb img { width: 100%; height: 64px; object-fit: contain; display: block; background: #011320; border-radius: 4px; }
+  .thumb.sel { border-color: var(--accent); color: var(--text); }
+  code { background: #011320; padding: 2px 6px; border-radius: 5px; font-size: 13px; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Research Map · Admin</h1>
+  <div class="right">
+    <span class="status" id="status"></span>
+    <button id="homeBtn" title="Send the player back to the world map">Back to world map</button>
+    <a class="btn primary" href="/" target="_blank">Open player ↗</a>
+  </div>
+</header>
+
+<main>
+  <!-- ================= Switches ================= -->
+  <section>
+    <h2>Switches → country → abstract</h2>
+    <p class="help">Each switch flies the map to its place, then shows the abstract of its PDF with a QR code for download.
+      <b>PDF “Auto”</b> picks the file whose name starts with the switch number (1_…, 2_…). <b>Abstract “Auto”</b> finds the part between “Abstract” and “Introduction”; if it picks the wrong part, choose a page number instead.
+      On the player, keys 1–9 and 0 act like the switches.</p>
+    <datalist id="countries"></datalist>
+    <div class="switches" id="switches"></div>
+  </section>
+
+  <!-- ================= Timing ================= -->
+  <section>
+    <h2>Timing &amp; home screen</h2>
+    <div class="grid" id="settings"></div>
+  </section>
+
+  <!-- ================= QR ================= -->
+  <section>
+    <h2>QR code downloads</h2>
+    <p class="help">The QR code opens a download link served by this PC. <b>Phones must be on the same Wi-Fi / network as this PC.</b>
+      If Windows asks whether to allow the app on the network, click <b>Allow</b> (Private networks).
+      To use online links instead (e.g. Google Drive), fill in “Download link” on a switch.</p>
+    <div class="grid">
+      <label class="field"><span>Download address used in QR codes</span>
+        <input id="publicBaseUrl" placeholder="auto"></label>
+      <div class="field"><span>Auto-detected address of this PC</span><code id="lanAddr">…</code></div>
+    </div>
+  </section>
+
+  <!-- ================= PDF library ================= -->
+  <section>
+    <h2>
+      <span>PDF library <small id="pdfCount" style="color:var(--muted);font-weight:400"></small></span>
+      <label class="btn primary">+ Upload PDF(s)<input type="file" id="upload" accept="application/pdf,.pdf" multiple hidden></label>
+    </h2>
+    <div class="list" id="files"></div>
+    <div class="drop" id="drop">Drop PDF files here to upload. Uploading a file with the same name replaces it.</div>
+  </section>
+
+  <!-- ================= ESP32 ================= -->
+  <section>
+    <h2><span>ESP32 switches</span><span id="serialState" class="pill">checking…</span></h2>
+    <div class="grid">
+      <label class="field"><span>Serial port</span><select id="serialPort"></select></label>
+      <label class="field"><span>Baud rate</span><input id="baudRate" type="number" min="1200" step="1"></label>
+      <div class="field"><span>Last switch pressed</span><b id="lastPress">–</b></div>
+    </div>
+  </section>
+
+  <!-- ================= Logo ================= -->
+  <section>
+    <h2>
+      <span>Logo on the map</span>
+      <label class="btn">Upload image<input type="file" accept="image/*" hidden id="imgUpload"></label>
+    </h2>
+    <div class="thumbs" id="logoThumbs"></div>
+  </section>
+</main>
+
+<input type="file" id="swUpload" accept="application/pdf,.pdf" hidden>
+
+<script>
+const $ = id => document.getElementById(id);
+let cfg = null;
+
+const FIELDS = [
+  { key: 'abstractDuration', label: 'Show abstract for (seconds)', min: 5, max: 1800, step: 5 },
+  { key: 'zoomDuration',     label: 'Zoom to country (seconds)', min: 0.5, max: 10, step: 0.1 },
+  { key: 'countryHold',      label: 'Pause on country before abstract (seconds)', min: 0, max: 10, step: 0.1 },
+  { key: 'revealDuration',   label: 'Map → abstract transition (seconds)', min: 0.2, max: 4, step: 0.1 },
+];
+
+async function load() {
+  cfg = await (await fetch('/api/config', { cache: 'no-store' })).json();
+  renderSwitches(); renderSettings(); renderFiles(); renderLogos();
+  $('publicBaseUrl').value = cfg.settings.publicBaseUrl || '';
+  $('lanAddr').textContent = cfg.lanAddress;
+  $('baudRate').value = cfg.settings.baudRate || 115200;
+  refreshSerial();
+}
+
+// refresh derived info (auto PDF / download links) without re-rendering inputs
+async function refreshDerived() {
+  const fresh = await (await fetch('/api/config', { cache: 'no-store' })).json();
+  cfg.resolved = fresh.resolved; cfg.downloadUrls = fresh.downloadUrls; cfg.files = fresh.files;
+  document.querySelectorAll('.sw').forEach((el, i) => updateSwitchInfo(el, i));
+}
+
+let saveTimer;
+function save(now) {
+  clearTimeout(saveTimer);
+  setStatus('Saving…');
+  saveTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: cfg.settings, switches: cfg.switches }) });
+      if (!r.ok) throw new Error((await r.json()).error);
+      setStatus('Saved ✓');
+      refreshDerived();
+    } catch (e) { setStatus('Save failed: ' + e.message, true); }
+  }, now ? 0 : 450);
+}
+function setStatus(t, err) { $('status').textContent = t; $('status').classList.toggle('err', !!err); }
+
+// ---------- Switches ----------
+function renderSwitches() {
+  const wrap = $('switches');
+  wrap.innerHTML = '';
+  cfg.switches.forEach((sw, i) => {
+    const el = document.createElement('div');
+    el.className = 'sw';
+    el.innerHTML = `
+      <div class="sw-head">
+        <div class="num">${i + 1}</div>
+        <div class="what"><b data-k="headline"></b><small data-k="info"></small></div>
+        <button data-a="test" class="primary" title="Run this switch on the player now">▶ Test</button>
+        <button data-a="upload" title="Upload a PDF and assign it to this switch">Upload PDF</button>
+        <button data-a="view" title="Open the PDF">View PDF</button>
+      </div>
+      <div class="sw-grid">
+        <label class="field wide"><span>PDF</span><select data-f="pdf"></select></label>
+        <label class="field"><span>Place name</span><input data-f="place"></label>
+        <label class="field"><span>Country (highlighted)</span><input data-f="country" list="countries"></label>
+        <label class="field"><span>Latitude</span><input data-f="lat" type="number" step="0.01"></label>
+        <label class="field"><span>Longitude</span><input data-f="lon" type="number" step="0.01"></label>
+        <label class="field"><span>Zoom (1 = world)</span><input data-f="zoom" type="number" step="0.5" min="1" max="60"></label>
+        <label class="field"><span>Abstract</span><select data-f="abstractPage"></select></label>
+        <label class="field wide"><span>Title shown (empty = from the PDF)</span><input data-f="title" placeholder="auto"></label>
+        <label class="field wide"><span>Download link for QR (empty = this PC)</span><input data-f="link" placeholder="auto"></label>
+      </div>`;
+
+    const pdfSel = el.querySelector('[data-f=pdf]');
+    pdfSel.add(new Option(`Auto (file starting with ${i + 1}_)`, ''));
+    cfg.files.forEach(f => pdfSel.add(new Option(f, f)));
+    const absSel = el.querySelector('[data-f=abstractPage]');
+    absSel.add(new Option('Auto-detect', 'auto'));
+    for (let p = 1; p <= 10; p++) absSel.add(new Option(`Whole page ${p}`, String(p)));
+
+    el.querySelectorAll('[data-f]').forEach(input => {
+      const k = input.dataset.f;
+      input.value = sw[k] ?? '';
+      input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', () => {
+        sw[k] = input.type === 'number' ? Number(input.value) : input.value;
+        save(input.tagName === 'SELECT');
+        updateSwitchInfo(el, i);
+      });
+    });
+
+    el.querySelector('[data-a=test]').onclick = () => { save(true); setTimeout(() => fetch('/api/press?n=' + (i + 1), { method: 'POST' }), 150); };
+    el.querySelector('[data-a=view]').onclick = () => { const f = cfg.resolved[i]; if (f) window.open('/pdf/' + encodeURIComponent(f), '_blank'); };
+    el.querySelector('[data-a=upload]').onclick = () => {
+      const input = $('swUpload');
+      input.value = '';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        setStatus(`Uploading ${file.name}…`);
+        const r = await fetch('/api/upload?' + new URLSearchParams({ name: file.name, switch: i + 1 }), { method: 'POST', body: file });
+        const res = await r.json();
+        if (!r.ok) return setStatus(res.error || 'Upload failed', true);
+        setStatus('Uploaded ✓');
+        await load();
+      };
+      input.click();
+    };
+    wrap.appendChild(el);
+    updateSwitchInfo(el, i);
+  });
+}
+
+function updateSwitchInfo(el, i) {
+  const sw = cfg.switches[i];
+  const file = cfg.resolved[i];
+  el.querySelector('[data-k=headline]').textContent = [sw.place, sw.country].filter(Boolean).filter((v, j, a) => a.indexOf(v) === j).join(', ') || 'No place set';
+  const info = el.querySelector('[data-k=info]');
+  info.textContent = file ? `${file}  ·  QR: ${cfg.downloadUrls[i] || '—'}` : 'No PDF found for this switch';
+  info.style.color = file ? '' : 'var(--red)';
+}
+
+// ---------- Settings ----------
+function renderSettings() {
+  const wrap = $('settings');
+  wrap.innerHTML = '';
+  for (const f of FIELDS) {
+    const el = document.createElement('label');
+    el.className = 'field';
+    el.innerHTML = `<span>${f.label}</span><input type="number" min="${f.min}" max="${f.max}" step="${f.step}">`;
+    const input = el.querySelector('input');
+    input.value = cfg.settings[f.key];
+    input.onchange = () => {
+      const v = Math.min(f.max, Math.max(f.min, Number(input.value) || f.min));
+      input.value = v; cfg.settings[f.key] = v; save();
+    };
+    wrap.appendChild(el);
+  }
+  const styleField = document.createElement('label');
+  styleField.className = 'field';
+  styleField.innerHTML = `<span>How the abstract is shown</span>
+    <select>
+      <option value="auto">Auto: large text on tall screens, PDF image on wide screens</option>
+      <option value="text">Always large text (taken from the PDF)</option>
+      <option value="image">Always the PDF image</option>
+    </select>`;
+  const styleSel = styleField.querySelector('select');
+  styleSel.value = cfg.settings.abstractStyle || 'auto';
+  styleSel.onchange = () => { cfg.settings.abstractStyle = styleSel.value; save(true); };
+  wrap.appendChild(styleField);
+
+  const hint = document.createElement('label');
+  hint.className = 'field';
+  hint.innerHTML = `<span>Text at the bottom of the map</span><input>`;
+  const hintIn = hint.querySelector('input');
+  hintIn.value = cfg.settings.hintText;
+  hintIn.oninput = () => { cfg.settings.hintText = hintIn.value; save(); };
+  wrap.appendChild(hint);
+
+  for (const [key, text] of [['showHint', 'Show the text'], ['showLogo', 'Show the logo']]) {
+    const c = document.createElement('label');
+    c.className = 'check';
+    c.innerHTML = `<input type="checkbox"> ${text}`;
+    const cb = c.querySelector('input');
+    cb.checked = !!cfg.settings[key];
+    cb.onchange = () => { cfg.settings[key] = cb.checked; save(true); };
+    wrap.appendChild(c);
+  }
+}
+
+$('publicBaseUrl').oninput = e => { cfg.settings.publicBaseUrl = e.target.value.trim(); save(); };
+
+// ---------- PDF library ----------
+function renderFiles() {
+  const list = $('files');
+  list.innerHTML = '';
+  $('pdfCount').textContent = `${cfg.files.length} file(s)`;
+  if (!cfg.files.length) list.innerHTML = '<p class="help">No PDFs yet.</p>';
+  cfg.files.forEach(file => {
+    const used = cfg.resolved.map((f, i) => (f === file ? i + 1 : null)).filter(Boolean);
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<div class="name"></div>
+      <a class="btn" target="_blank">View</a>
+      <button class="danger">Delete</button>`;
+    row.querySelector('.name').textContent = file;
+    const small = document.createElement('small');
+    small.textContent = used.length ? `switch ${used.join(', ')}` : 'not used';
+    row.querySelector('.name').appendChild(small);
+    row.querySelector('a').href = '/pdf/' + encodeURIComponent(file);
+    row.querySelector('button').onclick = async () => {
+      if (!confirm(`Delete "${file}"? This cannot be undone.`)) return;
+      await fetch('/api/pdf/' + encodeURIComponent(file), { method: 'DELETE' });
+      await load();
+      setStatus('Deleted ✓');
+    };
+    list.appendChild(row);
+  });
+}
+
+async function uploadMany(files) {
+  for (const f of files) {
+    if (!f.name.toLowerCase().endsWith('.pdf')) { setStatus(`${f.name} is not a PDF`, true); continue; }
+    setStatus(`Uploading ${f.name}…`);
+    const r = await fetch('/api/upload?' + new URLSearchParams({ name: f.name }), { method: 'POST', body: f });
+    if (!r.ok) { setStatus((await r.json()).error || 'Upload failed', true); continue; }
+    setStatus('Uploaded ✓');
+  }
+  await load();
+}
+$('upload').onchange = e => uploadMany([...e.target.files]).then(() => e.target.value = '');
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => uploadMany([...e.dataTransfer.files]));
+
+// ---------- Logo ----------
+function renderLogos() {
+  const el = $('logoThumbs');
+  el.innerHTML = '';
+  cfg.images.forEach(img => {
+    const t = document.createElement('div');
+    t.className = 'thumb' + (cfg.settings.logo === img ? ' sel' : '');
+    t.innerHTML = `<img loading="lazy"><div></div>`;
+    t.querySelector('img').src = '/images/' + encodeURIComponent(img);
+    t.querySelector('div').textContent = img;
+    t.onclick = () => { cfg.settings.logo = img; save(true); renderLogos(); };
+    el.appendChild(t);
+  });
+}
+$('imgUpload').onchange = async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const r = await fetch('/api/upload?' + new URLSearchParams({ type: 'image', name: file.name }), { method: 'POST', body: file });
+  const res = await r.json();
+  if (!r.ok) return setStatus(res.error || 'Upload failed', true);
+  await load();
+  cfg.settings.logo = res.name; save(true); renderLogos();
+  e.target.value = '';
+};
+
+// ---------- ESP32 ----------
+let lastFlash = 0;
+async function refreshSerial() {
+  let s;
+  try { s = await (await fetch('/api/serial', { cache: 'no-store' })).json(); } catch { return; }
+  const st = $('serialState');
+  if (!s.available) { st.textContent = 'serialport module missing'; st.className = 'pill err'; }
+  else if (s.connected) { st.textContent = '● Connected on ' + s.port; st.className = 'pill ok'; }
+  else { st.textContent = '● Not connected' + (s.error ? ': ' + s.error : ''); st.className = 'pill err'; }
+
+  const sel = $('serialPort');
+  if (document.activeElement !== sel) {
+    sel.innerHTML = '';
+    sel.add(new Option('Auto-detect ESP32', 'auto'));
+    s.ports.forEach(p => sel.add(new Option(`${p.path}${p.name ? ' - ' + p.name : ''}`, p.path)));
+    const want = cfg.settings.serialPort || 'auto';
+    if (![...sel.options].some(o => o.value === want)) sel.add(new Option(want + ' (not found)', want));
+    sel.value = want;
+  }
+  const lb = s.lastButton;
+  $('lastPress').textContent = lb ? `Switch ${lb.n} → ${lb.file || 'no PDF'} (${lb.source === 'test' ? 'test' : 'ESP32'}, ${new Date(lb.at).toLocaleTimeString()})` : '–';
+  if (lb && lb.at !== lastFlash) {
+    lastFlash = lb.at;
+    const card = document.querySelectorAll('.sw')[lb.n - 1];
+    if (card) { card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1500); }
+  }
+}
+setInterval(refreshSerial, 1500);
+$('serialPort').onchange = e => { cfg.settings.serialPort = e.target.value; save(true); };
+$('baudRate').onchange = e => { cfg.settings.baudRate = Number(e.target.value) || 115200; save(true); };
+$('homeBtn').onclick = () => fetch('/api/home', { method: 'POST' });
+
+// Country names for the "Country" field
+fetch('/vendor/countries-50m.json').then(r => r.json()).then(topo => {
+  const names = topo.objects.countries.geometries.map(g => g.properties.name).filter(Boolean).sort();
+  $('countries').innerHTML = names.map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
+});
+
+load();
+</script>
+</body>
+</html>

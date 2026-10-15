@@ -1,0 +1,79 @@
+{
+  "name": "interactive-pdf-reader",
+  "version": "1.0.0",
+  "description": "Interactive auto-scrolling PDF player with ESP32 switches",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "dist": "electron-builder --win --x64"
+  },
+  "keywords": [],
+  "author": "XRI",
+  "license": "ISC",
+  "dependencies": {
+    "d3": "^7.9.0",
+    "pdfjs-dist": "^6.4.299",
+    "qrcode": "^1.5.4",
+    "serialport": "^13.0.0",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "productName": "PDF Player",
+  "build": {
+    "appId": "com.xri.pdfplayer",
+    "productName": "PDF Player",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "public/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "PDF",
+        "to": "defaults/PDF"
+      },
+      {
+        "from": "Images",
+        "to": "defaults/Images"
+      },
+      {
+        "from": "config.json",
+        "to": "defaults/config.json"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/@serialport/bindings-cpp/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "PDF-Player-folder.${ext}"
+    },
+    "portable": {
+      "artifactName": "PDF-Player.exe"
+    }
+  }
+}

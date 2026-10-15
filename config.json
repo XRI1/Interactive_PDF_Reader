@@ -1,0 +1,128 @@
+{
+  "settings": {
+    "abstractDuration": 120,
+    "zoomDuration": 3,
+    "countryHold": 1.2,
+    "revealDuration": 1.2,
+    "abstractStyle": "auto",
+    "showHint": true,
+    "hintText": "Press a button to explore the research",
+    "logo": "Nemonic.png",
+    "showLogo": true,
+    "publicBaseUrl": "",
+    "serialPort": "auto",
+    "baudRate": 115200
+  },
+  "switches": [
+    {
+      "pdf": "",
+      "title": "",
+      "place": "USA",
+      "country": "United States of America",
+      "lat": 39.5,
+      "lon": -98.35,
+      "zoom": 3.2,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Italy",
+      "country": "Italy",
+      "lat": 42.6,
+      "lon": 12.6,
+      "zoom": 6.5,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Sweden",
+      "country": "Sweden",
+      "lat": 62.5,
+      "lon": 16,
+      "zoom": 4.8,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Dinajpur",
+      "country": "Bangladesh",
+      "lat": 25.63,
+      "lon": 88.64,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Sylhet",
+      "country": "Bangladesh",
+      "lat": 24.9,
+      "lon": 91.87,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Sylhet",
+      "country": "Bangladesh",
+      "lat": 24.9,
+      "lon": 91.87,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Dhaka",
+      "country": "Bangladesh",
+      "lat": 23.81,
+      "lon": 90.41,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Dhaka",
+      "country": "Bangladesh",
+      "lat": 23.81,
+      "lon": 90.41,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Dhaka",
+      "country": "Bangladesh",
+      "lat": 23.81,
+      "lon": 90.41,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    },
+    {
+      "pdf": "",
+      "title": "",
+      "place": "Faridpur",
+      "country": "Bangladesh",
+      "lat": 23.61,
+      "lon": 89.84,
+      "zoom": 18,
+      "abstractPage": "auto",
+      "link": ""
+    }
+  ]
+}

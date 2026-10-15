@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research World Map</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --ocean-1: #06364d; --ocean-2: #021a2b; --ocean-3: #010d18;
+    --teal: #2dd4bf; --cyan: #67e8f9; --lime: #a3e635; --text: #e6fbff; --muted: #8fd3dd;
+    --reveal: 1.2s;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); user-select: none; cursor: none; }
+  body { background: radial-gradient(ellipse 80% 70% at 50% 45%, var(--ocean-1) 0%, var(--ocean-2) 55%, var(--ocean-3) 100%); }
+
+  #map { position: fixed; inset: 0; width: 100%; height: 100%; transition: filter var(--reveal) ease, transform var(--reveal) ease; }
+  body.reading #map { filter: blur(10px) brightness(.55) saturate(1.2); transform: scale(1.08); }
+
+  /* soft vignette + moving light sweep */
+  .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,8,16,.75) 100%); }
+  .sweep { position: fixed; inset: -20%; pointer-events: none; background: linear-gradient(100deg, transparent 40%, rgba(103,232,249,.06) 50%, transparent 60%); animation: sweep 9s linear infinite; }
+  @keyframes sweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+
+  /* ---------- home overlay ---------- */
+  #overlay { position: fixed; inset: 0; pointer-events: none; transition: opacity .8s ease; }
+  body.zoomed #overlay { opacity: 0; }
+  #logo { position: absolute; top: 2vh; left: 50%; transform: translateX(-50%); width: min(20vw, 30vh); filter: drop-shadow(0 0 18px rgba(45,212,191,.45)); animation: logoIn 1.6s cubic-bezier(.2,.9,.25,1.1) both, float 6s ease-in-out 1.6s infinite; }
+  @keyframes logoIn { from { opacity: 0; transform: translate(-50%, -30px) scale(.8); filter: blur(12px); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+  @keyframes float { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -8px); } }
+  #hint { position: absolute; bottom: 4.5vh; left: 50%; transform: translateX(-50%); white-space: nowrap;
+          font-size: clamp(14px, 1.5vw, 24px); letter-spacing: .3em; text-transform: uppercase; color: var(--cyan);
+          text-shadow: 0 0 14px rgba(103,232,249,.8); animation: pulse 2.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+
+  /* place title while zooming */
+  #placeTag { position: fixed; left: 50%; top: 14vh; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity .6s ease, transform .6s ease; pointer-events: none; }
+  #placeTag.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #placeTag .p { font-size: clamp(30px, 4.5vw, 72px); font-weight: 700; letter-spacing: .04em; text-shadow: 0 0 30px rgba(45,212,191,.8), 0 4px 18px rgba(0,0,0,.6); }
+  #placeTag .c { font-size: clamp(14px, 1.4vw, 22px); letter-spacing: .4em; text-transform: uppercase; color: var(--lime); text-shadow: 0 0 12px rgba(163,230,53,.6); }
+
+  /* burst rings at the pin before the reveal */
+  .burst { position: fixed; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 3px solid var(--lime); pointer-events: none; animation: burst 1.2s ease-out forwards; box-shadow: 0 0 30px var(--lime), inset 0 0 20px var(--lime); }
+  @keyframes burst { from { transform: scale(.2); opacity: 1; } to { transform: scale(14); opacity: 0; } }
+
+  /* ---------- abstract view ---------- */
+  #abstract { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) min(30vw, 460px); gap: 3vw; padding: 5vh 4vw;
+              background: radial-gradient(ellipse at 30% 40%, rgba(6,54,77,.55), rgba(1,13,24,.85));
+              clip-path: circle(0px at var(--x, 50%) var(--y, 50%)); transition: clip-path var(--reveal) cubic-bezier(.7,0,.2,1); visibility: hidden; }
+  #abstract.open { clip-path: circle(150vmax at var(--x, 50%) var(--y, 50%)); visibility: visible; }
+  #abstract.closing { visibility: visible; }
+
+  .paperWrap { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .paper { position: relative; max-width: 100%; max-height: 100%; background: #fff; border-radius: 10px; padding: 1.6vh 1.4vw;
+           box-shadow: 0 0 0 1px rgba(103,232,249,.35), 0 0 60px rgba(45,212,191,.35), 0 30px 80px rgba(0,0,0,.6);
+           opacity: 0; transform: translateY(30px) scale(.96); transition: opacity .8s ease .5s, transform .9s cubic-bezier(.2,.9,.25,1) .5s; display: flex; }
+  #abstract.open .paper { opacity: 1; transform: none; }
+  .paper canvas { display: block; max-width: 100%; max-height: calc(90vh - 3.2vh); width: auto; height: auto; }
+  .paper .tag { position: absolute; top: -14px; left: 22px; background: linear-gradient(90deg, var(--teal), var(--lime)); color: #022; font-weight: 700; font-size: 13px; letter-spacing: .25em; padding: 5px 14px; border-radius: 99px; box-shadow: 0 0 20px rgba(45,212,191,.6); }
+
+  .side { display: flex; flex-direction: column; justify-content: center; gap: 2.4vh; min-height: 0; }
+  .side > * { opacity: 0; transform: translateX(40px); transition: opacity .7s ease, transform .8s cubic-bezier(.2,.9,.25,1); }
+  #abstract.open .side > * { opacity: 1; transform: none; }
+  #abstract.open .side > :nth-child(1) { transition-delay: .6s; }
+  #abstract.open .side > :nth-child(2) { transition-delay: .75s; }
+  #abstract.open .side > :nth-child(3) { transition-delay: .9s; }
+  #abstract.open .side > :nth-child(4) { transition-delay: 1.05s; }
+  .loc .num { display: inline-block; font-size: 13px; letter-spacing: .3em; color: var(--lime); border: 1px solid rgba(163,230,53,.6); padding: 3px 12px; border-radius: 99px; margin-bottom: 1.2vh; }
+  .loc .p { font-size: clamp(28px, 3.2vw, 56px); font-weight: 700; line-height: 1.05; text-shadow: 0 0 24px rgba(45,212,191,.6); }
+  .loc .c { font-size: clamp(13px, 1.1vw, 18px); letter-spacing: .35em; text-transform: uppercase; color: var(--muted); margin-top: .6vh; }
+  .title { font-size: clamp(15px, 1.25vw, 22px); line-height: 1.4; color: #d2f5f9; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; border-left: 3px solid var(--teal); padding-left: 14px; }
+  .title:empty { display: none; }
+
+  .qr { display: flex; gap: 1.2vw; align-items: center; background: rgba(4,38,59,.7); border: 1px solid rgba(103,232,249,.35); border-radius: 16px; padding: 1.4vw; box-shadow: 0 0 40px rgba(45,212,191,.2); }
+  .qr .code { flex: none; width: min(11vw, 20vh); aspect-ratio: 1; background: #fff; border-radius: 10px; padding: 6px; box-shadow: 0 0 24px rgba(163,230,53,.45); animation: qrGlow 2.4s ease-in-out infinite; }
+  .qr .code img { width: 100%; height: 100%; display: block; }
+  @keyframes qrGlow { 0%,100% { box-shadow: 0 0 16px rgba(163,230,53,.35); } 50% { box-shadow: 0 0 34px rgba(163,230,53,.8); } }
+  .qr b { display: block; font-size: clamp(15px, 1.25vw, 22px); color: var(--lime); margin-bottom: .6vh; }
+  .qr small { display: block; color: var(--muted); font-size: clamp(11px, .85vw, 14px); line-height: 1.4; }
+  .qr.hidden { display: none; }
+
+  .timer { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 14px; letter-spacing: .1em; }
+  .timer svg { width: 54px; height: 54px; transform: rotate(-90deg); }
+  .timer circle { fill: none; stroke-width: 4; }
+  .timer .bg { stroke: rgba(103,232,249,.15); }
+  .timer .fg { stroke: var(--teal); stroke-linecap: round; filter: drop-shadow(0 0 4px var(--teal)); }
+  .timer span { font-variant-numeric: tabular-nums; font-size: 22px; color: var(--text); }
+
+  #loader { position: fixed; left: 50%; top: 50%; width: 70px; height: 70px; margin: -35px; border-radius: 50%; border: 4px solid rgba(103,232,249,.15); border-top-color: var(--lime); animation: spin 1s linear infinite; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  #loader.show { opacity: 1; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #msg { position: fixed; left: 50%; bottom: 5vh; transform: translateX(-50%); background: rgba(1,20,32,.8); border: 1px solid rgba(103,232,249,.4); padding: .7em 1.4em; border-radius: 10px; font-size: 18px; opacity: 0; transition: opacity .4s; }
+  #msg.show { opacity: 1; }
+
+  /* logo on the abstract screen */
+  .absLogo { width: min(16vw, 240px); align-self: flex-start; filter: drop-shadow(0 0 14px rgba(45,212,191,.45)); }
+  #abstract.open .side > :nth-child(5) { transition-delay: 1.2s; }
+  .paper canvas { max-width: none; max-height: none; }
+
+  /* abstract as reflowed text */
+  #paperCanvas { min-width: 0; }
+  .paper.textMode { padding: 3.2vh 3.5vw 2.6vh; background: linear-gradient(180deg, #ffffff, #f2fbfd); }
+  .absText { color: #0b2530; font-family: Georgia, "Times New Roman", serif; line-height: 1.45; }
+  .absHead { display: none; }
+  .absBody p { margin: 0 0 .7em; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+  .absBody p:first-child::first-letter { font-size: 2.6em; float: left; line-height: .9; margin: .06em .12em 0 0; color: #0f766e; font-weight: 700; }
+  .absBody b { color: #0f766e; font-family: "Segoe UI", system-ui, sans-serif; font-size: .82em; letter-spacing: .06em; }
+  .absKw { display: flex; flex-wrap: wrap; gap: .35em .4em; align-items: center; margin-top: .4em; padding-top: .7em; border-top: 2px solid #cfeef0;
+           font-family: "Segoe UI", system-ui, sans-serif; font-size: .78em; }
+  .absKw span { padding: .2em .7em; border-radius: 99px; background: #e3f7f4; color: #0f5f58; border: 1px solid #a7e3dc; }
+  .absKw .kwTitle { background: linear-gradient(90deg, #2dd4bf, #a3e635); color: #022; border: 0; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .85em; }
+
+  /* research list (portrait home screen) */
+  #legend { display: none; }
+
+  /* ================= PORTRAIT SCREENS (e.g. 9:16, 9:19) ================= */
+  @media (orientation: portrait) {
+    #logo { width: min(72vw, 40vh); top: 4vh; }
+    #hint { bottom: 3vh; font-size: clamp(13px, 2.6vw, 30px); letter-spacing: .22em; }
+    #placeTag { top: 22vh; }
+    #placeTag .p { font-size: clamp(36px, 9vw, 110px); }
+    #placeTag .c { font-size: clamp(14px, 3vw, 34px); }
+
+    #legend { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2vh 4vw; position: absolute; left: 6vw; right: 6vw; bottom: 9vh; }
+    #legend div { display: flex; align-items: center; gap: 2.5vw; padding: 1vh 3vw; border-radius: 99px;
+                  background: rgba(4,38,59,.6); border: 1px solid rgba(103,232,249,.25); font-size: clamp(13px, 2.7vw, 30px); color: var(--text);
+                  animation: legendIn .8s ease both; }
+    #legend b { flex: none; width: 2.2em; height: 2.2em; border-radius: 50%; display: grid; place-items: center; font-size: .75em;
+                background: linear-gradient(135deg, var(--teal), var(--lime)); color: #012; box-shadow: 0 0 12px rgba(163,230,53,.5); }
+    #legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @keyframes legendIn { from { opacity: 0; transform: translateY(20px); } }
+
+    /* header on top; below it the abstract (left, down to the bottom) and a QR column (right) */
+    #abstract { grid-template-columns: minmax(0, 1fr) 28vw; grid-template-rows: auto auto auto auto minmax(0, 1fr);
+                grid-template-areas: "logo logo" "loc loc" "title title" "paper qr" "paper timer";
+                gap: 1.8vh 3.5vw; padding: 3vh 4vw 3.5vh; align-items: start; }
+    .side { display: contents; }
+    .absLogo { grid-area: logo; justify-self: center; align-self: center; width: min(50vw, 22vh); }
+    .loc { grid-area: loc; text-align: center; }
+    .loc .num { font-size: clamp(12px, 2.3vw, 26px); margin-bottom: .6vh; }
+    .loc .p { font-size: clamp(32px, 7vw, 90px); }
+    .loc .c { font-size: clamp(12px, 2.4vw, 28px); }
+    .title { grid-area: title; font-size: clamp(14px, 2.7vw, 32px); text-align: center; border-left: 0; padding: 0 2vw;
+             -webkit-line-clamp: 3; }
+    .paperWrap { grid-area: paper; align-self: stretch; margin-top: 1.2vh; }
+    .paper { width: 100%; height: 100%; padding: 1.2vh 1.6vw; align-items: center; justify-content: center; }
+    .qr { grid-area: qr; flex-direction: column; text-align: center; padding: 2.4vw; gap: 1.6vh; margin-top: 1.2vh; }
+    .qr .code { width: 100%; }
+    .qr b { font-size: clamp(16px, 3.6vw, 44px); }
+    .qr small { font-size: clamp(11px, 2.2vw, 26px); }
+    .timer { grid-area: timer; flex-direction: column; justify-self: center; text-align: center; gap: 1vh; margin-top: 1.5vh; font-size: clamp(11px, 2vw, 22px); }
+    .timer svg { width: min(18vw, 10vh); height: min(18vw, 10vh); }
+    .timer span { font-size: clamp(20px, 5vw, 56px); }
+    .side > * { transform: translateY(30px); }
+  }
+</style>
+</head>
+<body>
+  <canvas id="map"></canvas>
+  <div class="sweep"></div>
+  <div class="vignette"></div>
+
+  <div id="overlay">
+    <img id="logo" alt="">
+    <div id="legend"></div>
+    <div id="hint"></div>
+  </div>
+  <div id="placeTag"><div class="p"></div><div class="c"></div></div>
+
+  <section id="abstract">
+    <div class="paperWrap"><div class="paper"><span class="tag">ABSTRACT</span><div id="paperCanvas"></div></div></div>
+    <div class="side">
+      <img class="absLogo" alt="">
+      <div class="loc"><div class="num"></div><div class="p"></div><div class="c"></div></div>
+      <div class="title"></div>
+      <div class="qr"><div class="code"><img alt="QR code"></div><div><b>Scan to download</b><small>Point your phone camera at the code to get the full paper (PDF).</small></div></div>
+      <div class="timer">
+        <svg viewBox="0 0 54 54"><circle class="bg" cx="27" cy="27" r="23"/><circle class="fg" cx="27" cy="27" r="23"/></svg>
+        <div><span>2:00</span><br>until the map returns</div>
+      </div>
+    </div>
+  </section>
+
+  <div id="loader"></div>
+  <div id="msg"></div>
+
+<script src="/vendor/d3.min.js"></script>
+<script src="/vendor/topojson-client.min.js"></script>
+<script type="module">
+import * as pdfjsLib from '/vendor/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.mjs';
+
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let config = null;
+
+async function fetchConfig() {
+  config = await (await fetch('/api/config', { cache: 'no-store' })).json();
+  const s = config.settings;
+  document.documentElement.style.setProperty('--reveal', s.revealDuration + 's');
+  const logo = $('#logo');
+  logo.style.display = s.showLogo && s.logo ? '' : 'none';
+  if (s.logo && logo.dataset.src !== s.logo) { logo.src = '/images/' + encodeURIComponent(s.logo); logo.dataset.src = s.logo; }
+  $('#hint').textContent = s.hintText || '';
+  $('#hint').style.display = s.showHint ? '' : 'none';
+  const absLogo = $('.absLogo');
+  absLogo.style.display = s.showLogo && s.logo ? '' : 'none';
+  if (s.logo && absLogo.dataset.src !== s.logo) { absLogo.src = '/images/' + encodeURIComponent(s.logo); absLogo.dataset.src = s.logo; }
+  renderLegend();
+  return config;
+}
+
+// Numbered list of the research places (shown on portrait screens)
+function renderLegend() {
+  const html = config.switches.map((s, i) => s.place || s.country
+    ? `<div style="animation-delay:${0.6 + i * 0.08}s"><b>${String(i + 1).padStart(2, '0')}</b><span></span></div>` : '').join('');
+  const el = $('#legend');
+  const key = JSON.stringify(config.switches.map(s => s.place || s.country));
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.innerHTML = html;
+  let j = 0;
+  config.switches.forEach(s => { if (s.place || s.country) el.querySelectorAll('span')[j++].textContent = s.place || s.country; });
+}
+
+// Scale the abstract image to the largest size that fits its area
+function fitPaper() {
+  const c = $('#paperCanvas canvas');
+  if (!c) return;
+  const wrap = $('.paperWrap'), paper = $('.paper');
+  const cs = getComputedStyle(paper);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const maxW = wrap.clientWidth - padX, maxH = wrap.clientHeight - padY - 10;
+  const s = Math.min(maxW / c.width, maxH / c.height);
+  c.style.width = Math.floor(c.width * s) + 'px';
+  c.style.height = Math.floor(c.height * s) + 'px';
+}
+
+function showMsg(text, ms = 4000) {
+  $('#msg').textContent = text;
+  $('#msg').classList.add('show');
+  clearTimeout(showMsg.t);
+  showMsg.t = setTimeout(() => $('#msg').classList.remove('show'), ms);
+}
+
+/* =====================================================================
+   WORLD MAP (canvas, d3-geo projection, camera with smooth fly-to)
+   ===================================================================== */
+const canvas = $('#map');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, dpr = 1;
+let projection, geoPath;
+let world50 = null, world10 = null;     // GeoJSON feature collections
+let shapes50 = [], shapes10 = [];        // [{ id, name, path: Path2D, bbox }]
+let graticule = null, sphere = null;
+let camera = { x: 0, y: 0, k: 1 };        // projected-space center + zoom
+let highlight = { name: null, t: 0 };     // highlighted country + fade 0..1
+let activePlace = null;
+let arcs = [];
+
+async function loadWorld() {
+  const topo50 = await (await fetch('/vendor/countries-50m.json')).json();
+  world50 = topojson.feature(topo50, topo50.objects.countries);
+  world50.features = world50.features.filter(f => f.properties.name !== 'Antarctica');
+  setupProjection();
+  requestAnimationFrame(draw);
+  // Load the detailed map in the background (used when zoomed in)
+  fetch('/vendor/countries-10m.json').then(r => r.json()).then(topo10 => {
+    world10 = topojson.feature(topo10, topo10.objects.countries);
+    world10.features = world10.features.filter(f => f.properties.name !== 'Antarctica');
+    shapes10 = buildShapes(world10);
+  });
+}
+
+function buildShapes(fc) {
+  return fc.features.map(f => {
+    const ctxPath = d3.path();
+    d3.geoPath(projection, ctxPath)(f);
+    return { name: f.properties.name, path: new Path2D(ctxPath.toString()), bbox: geoPath.bounds(f) };
+  });
+}
+
+function setupProjection() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const top = H * 0.2, pad = Math.min(W, H) * 0.03;
+  projection = d3.geoNaturalEarth1().fitExtent([[pad, top], [W - pad, H - pad * 2.2]], world50);
+  if (isPortrait()) {
+    // Tall screen: enlarge the map so the research places fill the width (the rest of the world runs off the sides)
+    projection.fitWidth(W, world50);
+    const pinXs = () => places().map(p => projection([p.lon, p.lat]));
+    let pts = pinXs();
+    if (pts.length) {
+      const xs = pts.map(p => p[0]);
+      const f = Math.min(3, Math.max(1, (W * 0.8) / Math.max(1, Math.max(...xs) - Math.min(...xs))));
+      projection.scale(projection.scale() * f);
+      pts = pinXs();
+      const cx = (Math.max(...pts.map(p => p[0])) + Math.min(...pts.map(p => p[0]))) / 2;
+      const cy = (Math.max(...pts.map(p => p[1])) + Math.min(...pts.map(p => p[1]))) / 2;
+      const [tx, ty] = projection.translate();
+      projection.translate([tx + W / 2 - cx, ty + H * 0.42 - cy]);
+    }
+  }
+  geoPath = d3.geoPath(projection);
+  const toP2D = obj => { const p = d3.path(); d3.geoPath(projection, p)(obj); return new Path2D(p.toString()); };
+  graticule = toP2D(d3.geoGraticule10());
+  sphere = toP2D({ type: 'Sphere' });
+  shapes50 = buildShapes(world50);
+  if (world10) shapes10 = buildShapes(world10);
+  camera = homeView();
+  buildArcs();
+}
+
+function isPortrait() { return H > W * 1.15; }
+function homeView() { return { x: W / 2, y: isPortrait() ? H / 2 : H / 2 + H * 0.04, k: 1 }; }
+
+function placeView(sw) {
+  const [x, y] = projection([sw.lon, sw.lat]);
+  return { x, y: y + (H * 0.02) / sw.zoom, k: sw.zoom };
+}
+
+// unique research places (several switches can share a city)
+function places() {
+  if (!config) return [];
+  const map = new Map();
+  config.switches.forEach((s, i) => {
+    if (!s.place && !s.country) return;
+    const key = `${s.lat.toFixed(2)},${s.lon.toFixed(2)}`;
+    if (!map.has(key)) map.set(key, { ...s, key, switches: [] });
+    map.get(key).switches.push(i + 1);
+  });
+  return [...map.values()];
+}
+
+// animated links between the research places (great-circle arcs)
+function buildArcs() {
+  const ps = places();
+  arcs = [];
+  if (ps.length < 2) return;
+  const hub = ps.reduce((a, b) => (b.switches.length > a.switches.length ? b : a));
+  const [hx, hy] = projection([hub.lon, hub.lat]);
+  ps.forEach(p => {
+    if (p === hub) return;
+    // curved line on the flat map, bowed upwards like a flight path
+    const [x1, y1] = projection([p.lon, p.lat]);
+    const lift = Math.hypot(x1 - hx, y1 - hy) * 0.25;
+    const pts = d3.range(0, 1.0001, 0.02).map(t => [hx + (x1 - hx) * t, hy + (y1 - hy) * t - Math.sin(Math.PI * t) * lift]);
+    arcs.push(pts);
+  });
+}
+
+function draw(now) {
+  const { x, y, k } = camera;
+  const tx = W / 2 - x * k, ty = H / 2 - y * k;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * tx, dpr * ty);
+
+  // globe outline + graticule
+  ctx.fillStyle = 'rgba(14, 116, 144, 0.10)';
+  ctx.fill(sphere);
+  ctx.strokeStyle = 'rgba(103, 232, 249, 0.07)';
+  ctx.lineWidth = 0.6 / k;
+  ctx.stroke(graticule);
+  ctx.strokeStyle = 'rgba(103, 232, 249, 0.25)';
+  ctx.lineWidth = 1 / k;
+  ctx.stroke(sphere);
+
+  // visible area in projected coords (for culling when zoomed in)
+  const vx0 = -tx / k, vy0 = -ty / k, vx1 = vx0 + W / k, vy1 = vy0 + H / k;
+  const shapes = k > 3.5 && shapes10.length ? shapes10 : shapes50;
+  const visible = shapes.filter(s => !(s.bbox[1][0] < vx0 || s.bbox[0][0] > vx1 || s.bbox[1][1] < vy0 || s.bbox[0][1] > vy1));
+
+  // land
+  const land = ctx.createLinearGradient(vx0, vy0, vx0, vy1);
+  land.addColorStop(0, '#0f766e');
+  land.addColorStop(1, '#115e59');
+  ctx.fillStyle = land;
+  for (const s of visible) if (s.name !== highlight.name || highlight.t === 0) ctx.fill(s.path);
+
+  // highlighted country (lime glow)
+  if (highlight.name && highlight.t > 0) {
+    const hs = visible.filter(s => s.name === highlight.name);
+    ctx.save();
+    ctx.shadowColor = `rgba(163, 230, 53, ${0.9 * highlight.t})`;
+    ctx.shadowBlur = 30 * dpr;
+    ctx.fillStyle = d3.interpolateRgb('#0f766e', '#4d9f3a')(highlight.t);
+    for (const s of hs) ctx.fill(s.path);
+    ctx.restore();
+    ctx.strokeStyle = `rgba(190, 242, 100, ${highlight.t})`;
+    ctx.lineWidth = 1.6 / k;
+    for (const s of hs) ctx.stroke(s.path);
+  }
+
+  // borders
+  ctx.strokeStyle = 'rgba(94, 234, 212, 0.55)';
+  ctx.lineWidth = 0.5 / k;
+  for (const s of visible) ctx.stroke(s.path);
+
+  // arcs (dashed, flowing)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const toScreen = ([px, py]) => [px * k + tx, py * k + ty];
+  ctx.save();
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([6, 10]);
+  ctx.lineDashOffset = -now / 40;
+  ctx.strokeStyle = `rgba(103, 232, 249, ${Math.max(0, 0.55 - (k - 1) * 0.15)})`;
+  if (k < 4) for (const a of arcs) {
+    ctx.beginPath();
+    a.forEach((p, i) => { const [sx, sy] = toScreen(p); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // pins
+  const ps = places();
+  const zoomedIn = k > 6;
+  const labelled = new Set();
+  for (const p of ps) {
+    const [sx, sy] = toScreen(projection([p.lon, p.lat]));
+    if (sx < -50 || sy < -50 || sx > W + 50 || sy > H + 50) continue;
+    const active = activePlace && activePlace.key === p.key;
+    const phase = ((now / 1600) + p.lat * 0.13) % 1;
+    const base = active ? 9 : 5;
+    // pulse ring
+    ctx.beginPath();
+    ctx.arc(sx, sy, base + phase * (active ? 34 : 18), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(163, 230, 53, ${0.7 * (1 - phase)})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // dot
+    ctx.beginPath();
+    ctx.arc(sx, sy, base, 0, Math.PI * 2);
+    ctx.fillStyle = active ? '#d9f99d' : '#a3e635';
+    ctx.shadowColor = '#a3e635';
+    ctx.shadowBlur = active ? 30 : 14;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(sx, sy, base * 0.45, 0, Math.PI * 2);
+    ctx.fillStyle = '#022c22';
+    ctx.fill();
+
+    // labels: one per country on the world view, one per place when zoomed in
+    const label = zoomedIn ? p.place : (ps.filter(q => q.country === p.country).length > 1 ? p.country : p.place);
+    if (!label || labelled.has(label)) continue;
+    labelled.add(label);
+    ctx.font = `600 ${zoomedIn ? 22 : 15}px "Segoe UI", sans-serif`;
+    ctx.textBaseline = 'middle';
+    // put the label on the left of the pin when it would run off the right edge
+    const flip = sx + base + 8 + ctx.measureText(label).width > W - 8;
+    ctx.textAlign = flip ? 'right' : 'left';
+    const lx = flip ? sx - base - 8 : sx + base + 8;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(1, 20, 32, 0.85)';
+    ctx.strokeText(label, lx, sy - base - 6);
+    ctx.fillStyle = '#e6fbff';
+    ctx.fillText(label, lx, sy - base - 6);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// Smooth zoom/pan between two camera positions (van Wijk "fly" interpolation)
+function flyTo(target, seconds, myRun) {
+  const from = [camera.x, camera.y, W / camera.k];
+  const to = [target.x, target.y, W / target.k];
+  const interp = d3.interpolateZoom(from, to);
+  const duration = Math.max(0.05, seconds) * 1000;
+  return new Promise(resolve => {
+    const t0 = performance.now();
+    function step(now) {
+      if (myRun !== runId) return resolve(false);
+      const t = Math.min(1, (now - t0) / duration);
+      const [x, y, w] = interp(d3.easeCubicInOut(t));
+      camera = { x, y, k: W / w };
+      if (t < 1) requestAnimationFrame(step); else resolve(true);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function fadeHighlight(name, to, ms = 800) {
+  if (name) highlight.name = name;
+  const from = highlight.t, t0 = performance.now();
+  return new Promise(resolve => {
+    function step(now) {
+      const t = Math.min(1, (now - t0) / ms);
+      highlight.t = from + (to - from) * t;
+      if (t < 1) requestAnimationFrame(step); else { if (to === 0) highlight.name = null; resolve(); }
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+/* =====================================================================
+   ABSTRACT EXTRACTION (PDF.js): find "Abstract" ... "Introduction"
+   ===================================================================== */
+const START_RE = /^\s*(a\s?b\s?s\s?t\s?r\s?a\s?c\s?t|summary)\b/i;
+const END_RE = /^\s*((\d+\.?\s*)?introduction\b|\d+\.?\s*background\b)/i;
+// Footnotes / page footer: correspondence, received dates, copyright, DOI...
+const FOOTER_RE = /^\s*[*†]?\s*(correspond|received|copyright|©|e-?mail|citation|how to cite|please cite|cite this|article history|doi:|https?:\/\/doi)/i;
+
+async function pageLines(page) {
+  const vp = page.getViewport({ scale: 1 });
+  const tc = await page.getTextContent();
+  return {
+    vp,
+    items: tc.items.filter(it => it.str && it.str.trim()).map(it => {
+      const h = it.height || Math.abs(it.transform[3]) || 10;
+      const base = vp.height - it.transform[5];
+      const x0 = it.transform[4];
+      return { str: it.str, top: base - h, bottom: base + h * 0.25, h, x0, x1: x0 + (it.width || 0) };
+    }),
+  };
+}
+
+// Two-column pages: if the abstract sits in one column, return that column's x-range
+function abstractColumn({ items, vp }, start) {
+  const W = vp.width;
+  const below = items.filter(it => it.top > start.top && it.top < start.top + vp.height * 0.5);
+  if (start.x0 < W * 0.45) {
+    const left = below.filter(it => it.x0 < W * 0.45);
+    if (!left.length) return null;
+    const right = Math.max(...left.map(it => it.x1));
+    if (right < W * 0.62) return { x0: Math.min(start.x0, ...left.map(it => it.x0)) - 10, x1: right + 10 };
+  } else {
+    const rightCol = below.filter(it => it.x0 >= W * 0.45);
+    if (rightCol.length) return { x0: Math.min(start.x0, ...rightCol.map(it => it.x0)) - 10, x1: Math.max(...rightCol.map(it => it.x1)) + 10 };
+  }
+  return null;
+}
+
+// Bottom of the last text line between two y positions
+function lastTextBottom(items, afterY, beforeY, fallback) {
+  const inside = items.filter(it => it.top > afterY && it.top < beforeY);
+  return inside.length ? Math.max(...inside.map(it => it.bottom)) : fallback;
+}
+
+// Running header at the top of a page (journal name, page number...): text above the first big gap
+function headerBottom({ items, vp }) {
+  const top = items.filter(it => it.top < vp.height * 0.15).sort((a, b) => a.top - b.top);
+  let bottom = -1;
+  for (const it of top) {
+    if (bottom >= 0 && it.top - bottom > 12) return bottom;  // gap after the header block
+    bottom = Math.max(bottom, it.bottom);
+  }
+  return Math.max(0, (top[0] ? top[0].top : vp.height * 0.04) - 4);  // no clear header
+}
+
+async function findAbstract(doc, sw) {
+  // Manual override: show a whole page
+  if (sw.abstractPage && sw.abstractPage !== 'auto') {
+    const n = Math.min(doc.numPages, Math.max(1, Number(sw.abstractPage) || 1));
+    return [{ page: n, y0: 0, y1: 1, x0: 0, x1: 1 }];
+  }
+  const maxPage = Math.min(3, doc.numPages);
+  const pages = [];
+  for (let n = 1; n <= maxPage; n++) pages.push(await pageLines(await doc.getPage(n)));
+
+  let start = null;
+  for (let i = 0; i < pages.length && !start; i++) {
+    const it = pages[i].items.find(it => START_RE.test(it.str));
+    if (it) start = { i, top: it.top, x0: it.x0 };
+  }
+
+  const fy = (i, y) => Math.min(1, Math.max(0, y / pages[i].vp.height));
+  const fx = (i, x) => Math.min(1, Math.max(0, x / pages[i].vp.width));
+
+  if (!start) {
+    // No "Abstract" heading: show the top of page 1 down to the Introduction, or the whole first page
+    const it = pages[0].items.find(it => END_RE.test(it.str));
+    if (it && fy(0, it.top) > 0.35) return [{ page: 1, y0: 0, y1: fy(0, it.top - 6), x0: 0, x1: 1 }];
+    return [{ page: 1, y0: 0, y1: 1, x0: 0, x1: 1 }];
+  }
+
+  const sp = pages[start.i];
+  const col = abstractColumn(sp, start);
+  const inCol = it => !col || (it.x0 >= col.x0 - 4 && it.x1 <= col.x1 + 4);
+  const colItems = sp.items.filter(inCol);
+  const x0 = col ? fx(start.i, col.x0) : 0, x1 = col ? fx(start.i, col.x1) : 1;
+  const y0 = fy(start.i, start.top - 10);
+
+  // End on the same page (Introduction heading inside the abstract's column)
+  const endHere = colItems.find(it => END_RE.test(it.str) && it.top > start.top + 5);
+  if (endHere) {
+    const yEnd = Math.min(lastTextBottom(colItems, start.top, endHere.top - 2, endHere.top - 6) + 8, endHere.top - 4);
+    return [{ page: start.i + 1, y0, y1: fy(start.i, yEnd), x0, x1 }];
+  }
+
+  // Otherwise the abstract runs to the bottom of the page (stop before footnotes / page footer)
+  const footer = colItems.filter(it => it.top > start.top + 20 && it.top > sp.vp.height * 0.45 && FOOTER_RE.test(it.str));
+  const limit = footer.length ? Math.min(...footer.map(it => it.top)) - 2 : sp.vp.height * 0.93;
+  const first = { page: start.i + 1, y0, y1: fy(start.i, lastTextBottom(colItems, start.top, limit, limit) + 8), x0, x1 };
+
+  // ...and maybe continues on the next page, up to its Introduction heading
+  const np = pages[start.i + 1];
+  const endNext = !col && np && np.items.find(it => END_RE.test(it.str));
+  if (!endNext) return [first];
+  const top = headerBottom(np);
+  const second = {
+    page: start.i + 2, x0: 0, x1: 1,
+    y0: fy(start.i + 1, top + 4),
+    y1: fy(start.i + 1, Math.min(lastTextBottom(np.items, top, endNext.top - 2, endNext.top - 6) + 8, endNext.top - 4)),
+  };
+  return second.y1 - second.y0 > 0.03 ? [first, second] : [first];
+}
+
+/* =====================================================================
+   ABSTRACT AS TEXT: pull the abstract's words out of the PDF and reflow
+   them as large text (used on tall screens, where the image gets too small)
+   ===================================================================== */
+const SECTION_RE = /^(IMPORTANCE|OBJECTIVES?|BACKGROUND|PURPOSE|AIMS?|CONTEXT)\b/;   // structured abstracts without an "Abstract" heading
+const KEYWORDS_RE = /^\s*key\s*-?\s*words?\b\s*:?/i;
+const LABEL_RE = /^((?:[A-Z]{2,}(?:\s+|\s*[&\/-]\s*))*[A-Z]{2,})(?::\s*|\s+(?=[A-Z]?[a-z(0-9]))/;
+
+function itemsToParagraphs(items) {
+  // group into lines
+  const sorted = [...items].sort((a, b) => a.top - b.top || a.x0 - b.x0);
+  const lines = [];
+  for (const it of sorted) {
+    const line = lines.find(l => Math.abs(l.top - it.top) < it.h * 0.5);
+    if (line) { line.items.push(it); line.bottom = Math.max(line.bottom, it.bottom); }
+    else lines.push({ top: it.top, bottom: it.bottom, h: it.h, items: [it] });
+  }
+  lines.sort((a, b) => a.top - b.top);
+  for (const l of lines) {
+    l.items.sort((a, b) => a.x0 - b.x0);
+    let text = '';
+    l.items.forEach((it, i) => {
+      const prev = l.items[i - 1];
+      const needSpace = prev && it.x0 - prev.x1 > it.h * 0.15 && !/\s$/.test(text) && !/^\s/.test(it.str);
+      text += (needSpace ? ' ' : '') + it.str;
+    });
+    l.text = text.replace(/\s+/g, ' ').trim();
+  }
+  const real = lines.filter(l => l.text);
+  if (!real.length) return [];
+
+  // typical distance between lines, to spot paragraph breaks
+  const steps = real.slice(1).map((l, i) => l.top - real[i].top).filter(d => d > 0).sort((a, b) => a - b);
+  const step = steps.length ? steps[Math.floor(steps.length / 2)] : 12;
+
+  const paras = [];
+  real.forEach((l, i) => {
+    const prev = real[i - 1];
+    const newPara = !prev || l.top - prev.top > step * 1.55
+      || (LABEL_RE.test(l.text) && /[.:]$|\d$/.test(prev.text.trim()))
+      || KEYWORDS_RE.test(l.text);
+    if (newPara) { paras.push(l.text); return; }
+    const last = paras[paras.length - 1];
+    // re-join words split with a hyphen at the end of a line
+    paras[paras.length - 1] = /[a-z]-$/.test(last) && /^[a-z]/.test(l.text) ? last.slice(0, -1) + l.text : last + ' ' + l.text;
+  });
+  // a sentence cut by a page break: previous part has no full stop and the next starts in lowercase
+  for (let i = paras.length - 1; i > 0; i--) {
+    if (!/[.!?:)\]]$/.test(paras[i - 1]) && /^[a-z]/.test(paras[i])) {
+      paras[i - 1] = /[a-z]-$/.test(paras[i - 1]) ? paras[i - 1].slice(0, -1) + paras[i] : paras[i - 1] + ' ' + paras[i];
+      paras.splice(i, 1);
+    }
+  }
+  return paras;
+}
+
+async function extractAbstractText(doc) {
+  const maxPage = Math.min(3, doc.numPages);
+  const pages = [];
+  for (let n = 1; n <= maxPage; n++) pages.push(await pageLines(await doc.getPage(n)));
+
+  // 1) "Abstract" heading, 2) a structured abstract label (IMPORTANCE, OBJECTIVE...), 3) the block above "Keywords"
+  let start = null;
+  for (const re of [START_RE, SECTION_RE]) {
+    for (let i = 0; i < pages.length && !start; i++) {
+      const it = pages[i].items.find(it => re.test(it.str.trim()));
+      if (it) start = { i, it };
+    }
+    if (start) break;
+  }
+
+  let collected = [];
+  if (start) {
+    const { vp, items } = pages[start.i];
+    const s = start.it;
+    // the abstract's column: lines that begin where the abstract begins
+    const near = items.filter(it => it.top >= s.top - 2 && it.top < s.top + vp.height * 0.5 && it.x0 >= s.x0 - 15 && it.x0 <= s.x0 + 40);
+    const right = Math.max(s.x1, ...near.map(it => it.x1)) + 6;
+    const inCol = it => it.x0 >= s.x0 - 15 && it.x0 < right && it.x1 <= right + 30;
+    const col = items.filter(it => inCol(it) && it.top >= s.top - 2);
+    // first end marker below the abstract that reaches into its column (e.g. a full-width "Please cite this article")
+    const stop = items
+      .filter(it => it.top > s.top + 5 && it.x1 > s.x0 - 15 && it.x0 < right && (END_RE.test(it.str) || FOOTER_RE.test(it.str)))
+      .sort((a, b) => a.top - b.top)[0];
+    const limit = stop ? stop.top - 1 : vp.height * 0.93;
+    collected = col.filter(it => it.top < limit);
+    // continues on the next page up to "Introduction"?
+    const np = pages[start.i + 1];
+    // stop at this page if it already has an Introduction below the abstract (in any column)
+    const endedByIntro = (stop && END_RE.test(stop.str)) || items.some(it => it.top > s.top + 5 && END_RE.test(it.str));
+    if (!endedByIntro && np) {
+      const endNext = np.items.find(it => END_RE.test(it.str));
+      if (endNext) {
+        const top = headerBottom(np);
+        collected = collected.concat(np.items
+          .filter(it => it.top > top && it.top < endNext.top - 1 && it.x0 >= s.x0 - 15 && it.x0 < right)
+          .map(it => ({ ...it, top: it.top + 100000, bottom: it.bottom + 100000 })));  // keep page 2 after page 1
+      }
+    }
+  } else {
+    // no heading: the paragraph just above "Keywords" on page 1
+    const { items } = pages[0];
+    const kw = items.find(it => KEYWORDS_RE.test(it.str));
+    if (!kw) return null;
+    const col = items.filter(it => it.x0 >= kw.x0 - 15 && it.top <= kw.top + kw.h * 2).sort((a, b) => b.top - a.top);
+    let edge = kw.top;
+    for (const it of col) {
+      if (it.top >= kw.top - 1) { collected.push(it); continue; }      // the keywords line(s)
+      if (edge - it.bottom > it.h * 1.6) break;                          // gap above the paragraph
+      collected.push(it);
+      edge = Math.min(edge, it.top);
+    }
+  }
+
+  const paras = itemsToParagraphs(collected);
+  // drop the "Abstract" word itself
+  if (paras.length) paras[0] = paras[0].replace(/^\s*(a\s?b\s?s\s?t\s?r\s?a\s?c\s?t|summary)\s*[:.\-–—]?\s*/i, '');
+  if (paras.length && !paras[0]) paras.shift();
+
+  // drop journal citation lines at the end ("JAMA Pediatr. 2014;168(3):228-233. doi:...", "Pediatrics 2010;126:e526")
+  const CITE_RE = /[A-Z][A-Za-z.& ]{2,40}\s(19|20)\d\d;\s*\d+/;
+  while (paras.length && (/doi:\s*10\./i.test(paras[paras.length - 1]) || CITE_RE.test(paras[paras.length - 1].slice(0, 60)))
+         && !KEYWORDS_RE.test(paras[paras.length - 1])) paras.pop();
+  if (paras.length) paras[paras.length - 1] = paras[paras.length - 1].replace(/\s+[A-Z][A-Za-z.& ]{2,40}\s(19|20)\d\d;\s*\d+\S*$/, '');
+
+  let keywords = [];
+  const kwIndex = paras.findIndex(p => KEYWORDS_RE.test(p));
+  if (kwIndex >= 0) {
+    keywords = paras.slice(kwIndex).join(' ').replace(KEYWORDS_RE, '').split(/\s*[,;•·]\s*/).map(k => k.trim()).filter(k => k && k.length < 60);
+    paras.splice(kwIndex);
+  }
+  const body = paras.map(p => {
+    const m = p.match(LABEL_RE);
+    return m && m[1].length > 3 ? { label: m[1], text: p.slice(m[0].length) } : { label: '', text: p };
+  }).filter(p => p.text || p.label);
+
+  const length = body.reduce((n, p) => n + p.text.length, 0);
+  return length >= 250 ? { body, keywords } : null;
+}
+
+// Build the text frame
+function buildTextAbstract(text) {
+  const el = document.createElement('div');
+  el.className = 'absText';
+  const h = document.createElement('div');
+  h.className = 'absHead';
+  h.textContent = 'Abstract';
+  el.appendChild(h);
+  const body = document.createElement('div');
+  body.className = 'absBody';
+  for (const p of text.body) {
+    const para = document.createElement('p');
+    if (p.label) { const b = document.createElement('b'); b.textContent = p.label + ' '; para.appendChild(b); }
+    para.appendChild(document.createTextNode(p.text));
+    body.appendChild(para);
+  }
+  el.appendChild(body);
+  if (text.keywords.length) {
+    const kw = document.createElement('div');
+    kw.className = 'absKw';
+    const t = document.createElement('span');
+    t.className = 'kwTitle';
+    t.textContent = 'Keywords';
+    kw.appendChild(t);
+    for (const k of text.keywords) { const s = document.createElement('span'); s.textContent = k; kw.appendChild(s); }
+    el.appendChild(kw);
+  }
+  return el;
+}
+
+// Largest font size at which the whole abstract still fits the frame
+function fitText() {
+  const el = $('#paperCanvas .absText');
+  if (!el) return;
+  const wrap = $('.paperWrap'), cs = getComputedStyle($('.paper'));
+  const maxH = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 6;
+  el.style.width = (wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + 'px';
+  let lo = 8, hi = 80;
+  while (hi - lo > 0.5) {
+    const mid = (lo + hi) / 2;
+    el.style.fontSize = mid + 'px';
+    if (el.offsetHeight <= maxH) lo = mid; else hi = mid;
+  }
+  el.style.fontSize = lo + 'px';
+}
+
+// Title: admin override, else the largest text near the top of page 1
+async function findTitle(doc) {
+  try {
+    const { items, vp } = await pageLines(await doc.getPage(1));
+    const top = items.filter(it => it.top < vp.height * 0.55 && it.str.trim().length > 2);
+    const maxH = Math.max(...top.map(it => it.h));
+    const big = top.filter(it => it.h >= maxH * 0.92).sort((a, b) => a.top - b.top);
+    const text = big.map(it => it.str.trim()).join(' ').replace(/\s+/g, ' ').trim();
+    if (text.length >= 12 && text.length <= 260) return text;
+  } catch {}
+  try {
+    const meta = await doc.getMetadata();
+    const t = meta.info && meta.info.Title;
+    if (t && t.length > 12 && !/^microsoft|untitled|\.docx?$/i.test(t)) return t;
+  } catch {}
+  return '';
+}
+
+async function renderRegions(doc, regions) {
+  const scale = 2.6;
+  const parts = [];
+  for (const r of regions) {
+    const page = await doc.getPage(r.page);
+    const vp = page.getViewport({ scale });
+    const full = document.createElement('canvas');
+    full.width = Math.floor(vp.width); full.height = Math.floor(vp.height);
+    await page.render({ canvas: full, viewport: vp }).promise;
+    const sy = Math.floor(r.y0 * full.height), sh = Math.max(10, Math.floor((r.y1 - r.y0) * full.height));
+    const sx = Math.floor((r.x0 || 0) * full.width), sw = Math.max(10, Math.floor(((r.x1 ?? 1) - (r.x0 || 0)) * full.width));
+    parts.push({ img: full, sx, sw, sy, sh });
+  }
+  const gap = parts.length > 1 ? 24 : 0;
+  const out = document.createElement('canvas');
+  out.width = Math.max(...parts.map(p => p.sw));
+  out.height = parts.reduce((s, p) => s + p.sh, 0) + gap * (parts.length - 1);
+  const c = out.getContext('2d');
+  c.fillStyle = '#fff'; c.fillRect(0, 0, out.width, out.height);
+  let y = 0;
+  parts.forEach((p, i) => {
+    c.drawImage(p.img, p.sx, p.sy, p.sw, p.sh, Math.floor((out.width - p.sw) / 2), y, p.sw, p.sh);
+    y += p.sh;
+    if (i < parts.length - 1) {   // page break marker
+      c.strokeStyle = '#cbd5e1'; c.setLineDash([10, 8]); c.lineWidth = 2;
+      c.beginPath(); c.moveTo(40, y + gap / 2); c.lineTo(out.width - 40, y + gap / 2); c.stroke();
+      y += gap;
+    }
+    p.img.width = p.img.height = 0;
+  });
+  return out;
+}
+
+const abstractCache = new Map();  // file -> Promise<{ canvas, title }>
+function loadAbstract(file, sw) {
+  const key = `${file}|${sw.abstractPage}`;
+  if (!abstractCache.has(key)) {
+    abstractCache.set(key, (async () => {
+      const task = pdfjsLib.getDocument({
+        url: '/pdf/' + encodeURIComponent(file),
+        wasmUrl: '/pdfjs/wasm/',
+        cMapUrl: '/pdfjs/cmaps/',
+        standardFontDataUrl: '/pdfjs/standard_fonts/',
+        iccUrl: '/pdfjs/iccs/',
+      });
+      try {
+        const doc = await task.promise;
+        const regions = await findAbstract(doc, sw);
+        const canvas = await renderRegions(doc, regions);
+        const title = await findTitle(doc);
+        let text = null;
+        try { text = await extractAbstractText(doc); } catch (e) { console.warn('abstract text', e); }
+        return { canvas, title, text };
+      } finally { task.destroy(); }
+    })().catch(err => { abstractCache.delete(key); throw err; }));
+  }
+  return abstractCache.get(key);
+}
+
+/* =====================================================================
+   SEQUENCE: switch -> fly to place -> reveal abstract -> timer -> back
+   ===================================================================== */
+let runId = 0;
+let state = 'home';          // home | flying | reading
+let timerHandle = null;
+
+async function showSwitch(n) {
+  const myRun = ++runId;
+  await fetchConfig().catch(() => {});
+  const sw = config.switches[n - 1];
+  const file = config.resolved[n - 1];
+  if (!sw) return;
+  buildArcs();
+
+  const pending = file ? loadAbstract(file, sw) : null;
+  if (pending) pending.catch(() => {});
+
+  if (state === 'reading') await closeAbstract();
+  if (myRun !== runId) return;
+
+  state = 'flying';
+  document.body.classList.add('zoomed');
+  activePlace = places().find(p => p.switches.includes(n)) || null;
+  $('#placeTag .p').textContent = sw.place || sw.country;
+  $('#placeTag .c').textContent = sw.place && sw.country && sw.place !== sw.country ? sw.country : '';
+  $('#placeTag').classList.add('show');
+
+  fadeHighlight(null, 0, 300).then(() => { if (myRun === runId) fadeHighlight(sw.country, 1, 1200); });
+  if (!await flyTo(placeView(sw), config.settings.zoomDuration, myRun)) return;
+  await sleep(config.settings.countryHold * 1000);
+  if (myRun !== runId) return;
+
+  if (!file) {
+    showMsg(`No PDF assigned to switch ${n}`);
+    await sleep(3000);
+    if (myRun === runId) goHome();
+    return;
+  }
+
+  let data;
+  $('#loader').classList.add('show');
+  try { data = await pending; } catch (e) {
+    console.error(e);
+    $('#loader').classList.remove('show');
+    showMsg(`Could not open ${file}`);
+    await sleep(3000);
+    if (myRun === runId) goHome();
+    return;
+  }
+  $('#loader').classList.remove('show');
+  if (myRun !== runId) return;
+
+  // fill the abstract view
+  // Text frame on tall screens (or when chosen in admin), the PDF image otherwise
+  const style = config.settings.abstractStyle || 'auto';
+  const useText = !!data.text && (style === 'text' || (style === 'auto' && isPortrait()));
+  $('.paper').classList.toggle('textMode', useText);
+  $('#paperCanvas').replaceChildren(useText ? buildTextAbstract(data.text) : data.canvas);
+  requestAnimationFrame(() => { fitPaper(); fitText(); });
+  setTimeout(fitText, 150);
+  $('.loc .num').textContent = 'RESEARCH ' + String(n).padStart(2, '0');
+  $('.loc .p').textContent = sw.place || sw.country;
+  $('.loc .c').textContent = sw.place && sw.country && sw.place !== sw.country ? sw.country : '';
+  $('.title').textContent = sw.title || data.title || '';
+  const hasLink = !!config.downloadUrls[n - 1];
+  $('.qr').classList.toggle('hidden', !hasLink);
+  if (hasLink) $('.qr img').src = `/api/qr?n=${n}&t=${Date.now()}`;
+
+  // transition: burst at the pin, then circular reveal
+  $('#placeTag').classList.remove('show');
+  const burst = document.createElement('div');
+  burst.className = 'burst';
+  burst.style.left = W / 2 + 'px'; burst.style.top = H / 2 + 'px';
+  document.body.appendChild(burst);
+  setTimeout(() => burst.remove(), 1300);
+  await sleep(350);
+  if (myRun !== runId) return;
+
+  const abs = $('#abstract');
+  abs.style.setProperty('--x', W / 2 + 'px');
+  abs.style.setProperty('--y', H / 2 + 'px');
+  abs.classList.remove('closing');
+  abs.classList.add('open');
+  document.body.classList.add('reading');
+  state = 'reading';
+
+  // countdown
+  const total = Math.max(5, Number(config.settings.abstractDuration) || 120);
+  const ring = $('.timer .fg'), len = 2 * Math.PI * 23;
+  ring.style.strokeDasharray = len;
+  const endAt = Date.now() + total * 1000;
+  clearInterval(timerHandle);
+  const tick = () => {
+    const left = Math.max(0, endAt - Date.now());
+    const s = Math.ceil(left / 1000);
+    $('.timer span').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    ring.style.strokeDashoffset = len * (1 - left / (total * 1000));
+    if (left <= 0) { clearInterval(timerHandle); if (myRun === runId) goHome(); }
+  };
+  tick();
+  timerHandle = setInterval(tick, 250);
+}
+
+async function closeAbstract() {
+  clearInterval(timerHandle);
+  const abs = $('#abstract');
+  if (!abs.classList.contains('open')) return;
+  abs.classList.add('closing');
+  abs.classList.remove('open');
+  document.body.classList.remove('reading');
+  await sleep(config.settings.revealDuration * 1000);
+  abs.classList.remove('closing');
+}
+
+async function goHome() {
+  const myRun = ++runId;
+  $('#placeTag').classList.remove('show');
+  $('#loader').classList.remove('show');
+  if (state === 'reading') await closeAbstract();
+  if (myRun !== runId) return;
+  state = 'flying';
+  fadeHighlight(null, 0, 1000);
+  await flyTo(homeView(), config.settings.zoomDuration, myRun);
+  if (myRun !== runId) return;
+  activePlace = null;
+  document.body.classList.remove('zoomed');
+  state = 'home';
+}
+
+/* =====================================================================
+   INPUT: ESP32 switches (server events), keyboard for testing
+   ===================================================================== */
+const events = new EventSource('/api/events');
+events.addEventListener('play', e => showSwitch(JSON.parse(e.data).button));
+events.addEventListener('home', () => goHome());
+
+let demoIndex = 0;
+document.addEventListener('keydown', e => {
+  if (/^(Digit|Numpad)[0-9]$/.test(e.code)) {
+    const n = Number(e.code.slice(-1)) || 10;
+    fetch('/api/press?n=' + n, { method: 'POST' });
+  } else if (e.code === 'Space') {
+    e.preventDefault();
+    demoIndex = demoIndex % 10 + 1;
+    fetch('/api/press?n=' + demoIndex, { method: 'POST' });
+  } else if (e.code === 'Escape') {
+    goHome();
+  } else if (e.code === 'KeyB') {
+    restart();
+  }
+});
+
+// Start from the beginning: back to the world map, replay the intro, Space starts again at switch 1
+async function restart() {
+  demoIndex = 0;
+  await goHome();
+  const logo = $('#logo');
+  logo.style.animation = 'none';
+  void logo.offsetWidth;  // reflow so the intro animation plays again
+  logo.style.animation = '';
+}
+
+let resizeT;
+addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    const wasHome = state === 'home';
+    setupProjection();
+    if (!wasHome && activePlace) camera = placeView(activePlace);
+    fitPaper();
+    fitText();
+  }, 200);
+});
+
+// Keep logo/hint/places in sync with the admin page while idle
+setInterval(() => { if (state === 'home') fetchConfig().then(buildArcs).catch(() => {}); }, 4000);
+
+await fetchConfig().catch(() => showMsg('Server not reachable'));
+await loadWorld();
+
+// Pre-load all abstracts in the background so switches react instantly
+(async () => {
+  for (let i = 0; i < config.switches.length; i++) {
+    const file = config.resolved[i];
+    if (file) await loadAbstract(file, config.switches[i]).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
