@@ -4,8 +4,8 @@
   "description": "Interactive auto-scrolling PDF player with ESP32 switches",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "server": "node server.js",
+    "start": "node server.js",
+    "app": "electron .",
     "dist": "electron-builder --win --x64"
   },
   "keywords": [],
@@ -75,5 +75,8 @@
     "portable": {
       "artifactName": "PDF-Player.exe"
     }
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

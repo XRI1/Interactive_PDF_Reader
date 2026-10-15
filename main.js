@@ -3,6 +3,13 @@
 //   Ctrl+Shift+O  open the data folder (PDF / Images / config.json)
 //   F11           toggle fullscreen
 //   Ctrl+Q        quit
+
+// Started with plain Node (e.g. on a web host like Render): just run the web server
+if (!process.versions.electron) {
+  require('./server.js').start().catch(err => { console.error(err.message); process.exit(1); });
+  return;
+}
+
 const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');

@@ -1,0 +1,14 @@
+# Render web service (https://render.com) - hosts the player, admin and QR downloads online.
+# The ESP32 switches only work on the PC they are plugged into, so the kiosk still runs locally.
+services:
+  - type: web
+    name: interactive-pdf-reader
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    envVars:
+      - key: ADMIN_PASSWORD
+        sync: false        # set it in the Render dashboard; protects /admin
+      - key: NODE_VERSION
+        value: "22"

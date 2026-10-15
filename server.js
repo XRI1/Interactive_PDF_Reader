@@ -103,12 +103,33 @@ function lanAddress() {
   return all.length ? all[0].address : 'localhost';
 }
 
+// Address phones use for downloads: admin setting, else the public web address (PUBLIC_URL / Render), else this PC on the network
+function autoBaseUrl() {
+  return process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://${lanAddress()}:${PORT}`;
+}
+
+// Remote admin access (e.g. when hosted online): HTTP Basic auth with the ADMIN_PASSWORD environment variable
+function checkAdmin(req, res) {
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password) {
+    send(res, 403, 'The admin panel is only available on the PC running the system. Set ADMIN_PASSWORD to allow remote access.');
+    return false;
+  }
+  const [scheme, encoded] = String(req.headers.authorization || '').split(' ');
+  const given = scheme === 'Basic' && encoded ? Buffer.from(encoded, 'base64').toString('utf8').split(':').slice(1).join(':') : '';
+  const a = Buffer.from(given), b = Buffer.from(password);
+  if (a.length === b.length && require('crypto').timingSafeEqual(a, b)) return true;
+  res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="PDF Player Admin", charset="UTF-8"', 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Admin password required.');
+  return false;
+}
+
 function downloadUrl(cfg, n) {
   const s = cfg.switches[n - 1];
   if (s && s.link) return s.link;
   const file = resolvePdf(cfg, n);
   if (!file) return null;
-  const base = (cfg.settings.publicBaseUrl || `http://${lanAddress()}:${PORT}`).replace(/\/+$/, '');
+  const base = (cfg.settings.publicBaseUrl || autoBaseUrl()).replace(/\/+$/, '');
   return `${base}/download/${encodeURIComponent(file)}`;
 }
 
@@ -133,7 +154,9 @@ function pressButton(n, source) {
 
 // ---------------- ESP32 serial ----------------
 let SerialPort = null, ReadlineParser = null;
-try {
+// No USB ports on a web host (Render sets RENDER); DISABLE_SERIAL=1 turns it off elsewhere
+const SERIAL_ENABLED = !process.env.RENDER && !process.env.DISABLE_SERIAL;
+if (SERIAL_ENABLED) try {
   ({ SerialPort } = require('serialport'));
   ({ ReadlineParser } = require('@serialport/parser-readline'));
 } catch {
@@ -283,8 +306,9 @@ const server = http.createServer(async (req, res) => {
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
       });
     }
-    // Everything else (player, admin, API) only from this PC
-    if (!isLocal) return send(res, 403, 'Only downloads are available from other devices.');
+    // Admin page and anything that changes data: this PC, or the admin password from elsewhere
+    const needsAdmin = p === '/admin' || p === '/admin.html' || p === '/api/serial' || (p.startsWith('/api/') && req.method !== 'GET');
+    if (needsAdmin && !isLocal && !checkAdmin(req, res)) return;
 
     // ---------- API ----------
     if (p === '/api/config' && req.method === 'GET') {
@@ -295,7 +319,7 @@ const server = http.createServer(async (req, res) => {
         images: listImages(),
         resolved: cfg.switches.map((_, i) => resolvePdf(cfg, i + 1)),
         downloadUrls: cfg.switches.map((_, i) => downloadUrl(cfg, i + 1)),
-        lanAddress: `http://${lanAddress()}:${PORT}`,
+        lanAddress: autoBaseUrl(),
       });
     }
 
@@ -433,7 +457,8 @@ function onListening() {
   console.log('  Interactive PDF Reader is running');
   console.log(`  Player : http://localhost:${PORT}/`);
   console.log(`  Admin  : http://localhost:${PORT}/admin`);
-  console.log(`  QR downloads use: http://${lanAddress()}:${PORT}`);
+  console.log(`  QR downloads use: ${autoBaseUrl()}`);
+  if (!process.env.ADMIN_PASSWORD) console.log('  Admin is only available on this PC (set ADMIN_PASSWORD to allow remote admin).');
   console.log('');
   console.log('  Press Ctrl+C to stop.');
   console.log('');
